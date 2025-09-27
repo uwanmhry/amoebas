@@ -22,6 +22,10 @@
   let imageToDelete = null;
   let deleting = false;
 
+  // Delete ALL modal state
+  let showDeleteAllModal = false;
+  let deletingAll = false;
+
   // Toast notification
   let toastMsg = '';
   let toastType = 'success'; // 'success' | 'error'
@@ -33,18 +37,16 @@
     setTimeout(() => (showToast = false), ms);
   };
 
-  // ---------- Fetch images from Supabase Storage ----------
+  // ---------- Fetch images ----------
   async function fetchImages() {
     isLoading = true;
     try {
-      // list files under folder "gallery"
       const { data, error } = await supabase.storage
         .from('gallery-images')
         .list('gallery', { limit: 100, offset: 0 });
 
       if (error) throw error;
 
-      // sort by created_at if available (desc)
       const files = (data || []).slice();
       files.sort((a, b) => {
         const ta = a?.created_at ? new Date(a.created_at).getTime() : 0;
@@ -52,7 +54,6 @@
         return tb - ta;
       });
 
-      // map to objects with public URL
       images = files.map(f => {
         const { data: { publicUrl } } = supabase.storage
           .from('gallery-images')
@@ -72,7 +73,7 @@
     }
   }
 
-  // ---------- File selection handler ----------
+  // ---------- File selection ----------
   function handleFileSelect(e) {
     uploadError = '';
     const file = e.target.files?.[0] ?? null;
@@ -110,7 +111,6 @@
 
       uploadProgress = 30;
 
-      // upload to storage
       const { error: uploadErr } = await supabase.storage
         .from('gallery-images')
         .upload(filePath, newImage.file, { cacheControl: '3600', upsert: false });
@@ -119,15 +119,11 @@
 
       uploadProgress = 65;
 
-      // get public url
       const { data: { publicUrl } } = supabase.storage
         .from('gallery-images')
         .getPublicUrl(filePath);
 
-      // Try to insert metadata to table 'gallery' if present.
-      // If this fails (e.g. missing columns), we swallow the error but still show success for storage upload.
       try {
-        // we only insert common columns; if table doesn't have them, this may throw (caught below)
         const { error: dbErr } = await supabase
           .from('gallery')
           .insert([{
@@ -138,24 +134,19 @@
           }]);
         if (dbErr) throw dbErr;
       } catch (dbInsertErr) {
-        // don't block — log and notify softly
         console.warn('DB insert warning (non-fatal):', dbInsertErr.message || dbInsertErr);
       }
 
       uploadProgress = 100;
       showNotification('Upload berhasil 🎉', 'success');
-      // reset form
       newImage = { title: '', description: '', file: null };
       showUploadModal = false;
-
-      // refresh gallery
       await fetchImages();
     } catch (err) {
       console.error('Upload failed:', err);
       uploadError = err.message || 'Terjadi kesalahan saat upload';
       showNotification('Upload gagal 😢', 'error');
     } finally {
-      // reset progress after a bit
       setTimeout(() => (uploadProgress = 0), 500);
     }
   }
@@ -167,7 +158,7 @@
     uploadProgress = 0;
   }
 
-  // ---------- Delete flow (storage + db row if exists) ----------
+  // ---------- Delete one ----------
   function confirmDelete(image) {
     imageToDelete = image;
     showDeleteModal = true;
@@ -177,13 +168,11 @@
     if (!imageToDelete) return;
     deleting = true;
     try {
-      // remove from storage
       const { error: storageErr } = await supabase.storage
         .from('gallery-images')
         .remove([`gallery/${imageToDelete.name}`]);
       if (storageErr) throw storageErr;
 
-      // remove from DB if any rows match image_url
       try {
         const { error: dbErr } = await supabase
           .from('gallery')
@@ -191,11 +180,9 @@
           .eq('image_url', imageToDelete.url);
         if (dbErr) throw dbErr;
       } catch (dbDeleteErr) {
-        // non-fatal: warn only
         console.warn('DB delete warning (non-fatal):', dbDeleteErr.message || dbDeleteErr);
       }
 
-      // update local UI
       images = images.filter(img => img.name !== imageToDelete.name);
       showNotification('Foto berhasil dihapus', 'success');
     } catch (err) {
@@ -211,6 +198,46 @@
   function cancelDelete() {
     showDeleteModal = false;
     imageToDelete = null;
+  }
+
+  // ---------- Delete all ----------
+  function confirmDeleteAll() {
+    showDeleteAllModal = true;
+  }
+
+  async function deleteAllImages() {
+    if (images.length === 0) return;
+    deletingAll = true;
+    try {
+      const paths = images.map(img => `gallery/${img.name}`);
+      const { error: storageErr } = await supabase.storage
+        .from('gallery-images')
+        .remove(paths);
+      if (storageErr) throw storageErr;
+
+      try {
+        const { error: dbErr } = await supabase
+          .from('gallery')
+          .delete()
+          .in('image_url', images.map(img => img.url));
+        if (dbErr) throw dbErr;
+      } catch (dbDeleteErr) {
+        console.warn('DB deleteAll warning (non-fatal):', dbDeleteErr.message || dbDeleteErr);
+      }
+
+      images = [];
+      showNotification('Semua foto berhasil dihapus', 'success');
+    } catch (err) {
+      console.error('Failed to delete all images:', err);
+      showNotification('Gagal menghapus semua foto', 'error');
+    } finally {
+      deletingAll = false;
+      showDeleteAllModal = false;
+    }
+  }
+
+  function cancelDeleteAll() {
+    showDeleteAllModal = false;
   }
 
   // ---------- lifecycle ----------
@@ -243,13 +270,22 @@
       <p class="text-gray-600 max-w-3xl mx-auto">Potret momen berkuda & memanah bersama Amoebas Archery.</p>
 
       {#if adminStatus}
-        <div class="mt-6">
+        <div class="mt-6 flex flex-wrap gap-3 justify-center">
           <button
             class="bg-yellow-500 hover:bg-yellow-400 text-blue-900 font-bold py-2 px-6 rounded-lg transition"
             on:click={() => showUploadModal = true}
           >
             + Upload Foto Baru
           </button>
+
+          {#if images.length > 0}
+            <button
+              class="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-6 rounded-lg transition"
+              on:click={confirmDeleteAll}
+            >
+              🗑 Hapus Semua
+            </button>
+          {/if}
         </div>
       {/if}
     </div>
@@ -263,7 +299,6 @@
       {#if images.length === 0}
         <!-- Empty state -->
         <div class="text-center py-12">
-          <!-- inline simple SVG illustration -->
           <svg class="w-24 h-24 mx-auto mb-4 text-gray-300" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <rect x="3" y="5" width="18" height="14" rx="2"></rect>
             <path d="M8 11l2 2 4-4"></path>
@@ -284,13 +319,12 @@
               />
 
               {#if adminStatus}
-                <!-- trash icon button -->
                 <button
-                  class="absolute top-3 right-3 bg-red-600/85 hover:bg-red-700 text-white p-2 rounded-full shadow opacity-0 group-hover:opacity-100 transition"
+                  class="absolute top-3 right-3 bg-red-600 text-white p-2 rounded-full shadow 
+                         opacity-90 hover:opacity-100 transition"
                   on:click={() => confirmDelete(img)}
                   title="Hapus gambar"
                 >
-                  <!-- trash SVG -->
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                           d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6"/>
@@ -304,7 +338,7 @@
     {/if}
   </div>
 
-  <!-- Upload Modal (backdrop blur + opacity 50%) -->
+  <!-- Upload Modal -->
   {#if showUploadModal}
     <div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div class="bg-white rounded-lg shadow-xl w-full max-w-md transform transition-all duration-300 animate-fadeInScale">
@@ -312,7 +346,6 @@
           <h3 class="text-xl font-bold text-blue-900 mb-4">Upload Foto Baru</h3>
 
           <div class="space-y-4">
-            <!-- optional title/description kept for DB metadata (but not shown in grid) -->
             <div>
               <label class="block text-sm text-gray-700 mb-1">Judul (opsional)</label>
               <input
@@ -382,10 +415,10 @@
     </div>
   {/if}
 
-  <!-- Delete Confirmation Modal -->
+  <!-- Delete One Modal -->
   {#if showDeleteModal}
     <div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 text-center transform transition-all duration-300 animate-fadeInScale">
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 text-center animate-fadeInScale">
         <svg class="w-12 h-12 text-red-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6"/>
@@ -403,26 +436,34 @@
       </div>
     </div>
   {/if}
+
+  <!-- Delete ALL Modal -->
+  {#if showDeleteAllModal}
+    <div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 text-center animate-fadeInScale">
+        <svg class="w-12 h-12 text-red-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6"/>
+        </svg>
+        <h3 class="text-lg font-semibold text-gray-900 mb-2">Hapus Semua Gambar?</h3>
+        <p class="text-gray-600 mb-6">Semua gambar akan dihapus permanen dari storage.</p>
+        <div class="flex justify-center space-x-4">
+          <button class="px-4 py-2 border rounded-md text-gray-600 hover:text-gray-800" on:click={cancelDeleteAll} disabled={deletingAll}>
+            Batal
+          </button>
+          <button class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700" on:click={deleteAllImages} disabled={deletingAll}>
+            {deletingAll ? 'Menghapus...' : 'Hapus Semua'}
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
 </section>
 
 <style>
   @keyframes fadeInScale {
-    from { opacity: 0; transform: scale(0.98); }
+    from { opacity: 0; transform: scale(0.95); }
     to { opacity: 1; transform: scale(1); }
   }
-  .animate-fadeInScale {
-    animation: fadeInScale 0.22s ease-out forwards;
-  }
-
-  input[type="file"]::file-selector-button {
-    background: #f0f0f0;
-    border: 1px solid #d1d5db;
-    padding: 0.5rem 1rem;
-    margin-right: 1rem;
-    border-radius: 0.375rem;
-    cursor: pointer;
-  }
-  input[type="file"]::file-selector-button:hover {
-    background: #e5e7eb;
-  }
+  .animate-fadeInScale { animation: fadeInScale 0.2s ease-out; }
 </style>
