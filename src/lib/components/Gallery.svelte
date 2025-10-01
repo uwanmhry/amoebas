@@ -1,5 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
+  import { browser } from '$app/environment';
   import { supabase } from '$lib/supabaseClient';
   import { isAdmin } from '$lib/auth';
   
@@ -240,50 +241,146 @@
     showDeleteAllModal = false;
   }
 
+  // Handle escape key - hanya di browser
+  function handleKeydown(event) {
+    if (event.key === 'Escape') {
+      if (showUploadModal) cancelUpload();
+      if (showDeleteModal) cancelDelete();
+      if (showDeleteAllModal) cancelDeleteAll();
+    }
+  }
+
+  // Handle click outside modal
+  function handleBackdropClick(event) {
+    if (event.target === event.currentTarget) {
+      if (showUploadModal) cancelUpload();
+      if (showDeleteModal) cancelDelete();
+      if (showDeleteAllModal) cancelDeleteAll();
+    }
+  }
+
   // ---------- lifecycle ----------
   onMount(async () => {
-    unsubscribeAdmin = isAdmin.subscribe(v => adminStatus = !!v);
-    await fetchImages();
+    // Hanya jalankan di browser
+    if (browser) {
+      unsubscribeAdmin = isAdmin.subscribe(v => adminStatus = !!v);
+      await fetchImages();
+      window.addEventListener('keydown', handleKeydown);
+    }
   });
 
   onDestroy(() => {
-    if (unsubscribeAdmin) unsubscribeAdmin();
+    // Hanya jalankan di browser
+    if (browser) {
+      if (unsubscribeAdmin) unsubscribeAdmin();
+      window.removeEventListener('keydown', handleKeydown);
+    }
   });
 </script>
 
 <!-- TOAST -->
 {#if showToast}
-  <div class="fixed top-6 right-6 z-50">
-    <div class="px-4 py-2 rounded shadow-lg text-white"
-         style="background:{toastType === 'success' ? '#059669' : '#DC2626'}">
+  <div class="fixed top-6 right-6 z-50 animate-fadeInScale">
+    <div class="px-6 py-4 rounded-2xl shadow-2xl text-white font-semibold backdrop-blur-sm border border-white/20"
+         class:bg-gradient-to-r={toastType === 'success'} 
+         class:from-green-500={toastType === 'success'}
+         class:to-emerald-600={toastType === 'success'}
+         class:from-red-500={toastType === 'error'}
+         class:to-rose-600={toastType === 'error'}>
       {toastMsg}
     </div>
   </div>
 {/if}
 
-<section id="gallery" class="py-20 bg-white">
-  <div class="container mx-auto px-4">
+<section id="gallery" class="relative py-32 overflow-hidden">
+  <!-- Multi-layer Background -->
+  <div class="absolute inset-0">
+    <!-- Base gradient -->
+    <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900"></div>
+    
+    <!-- Overlay gradients -->
+    <div class="absolute inset-0 bg-gradient-to-tr from-yellow-500/10 via-transparent to-amber-500/5"></div>
+    <div class="absolute inset-0 bg-gradient-to-bl from-transparent via-blue-800/20 to-cyan-900/10"></div>
+  </div>
+
+  <!-- Animated Background Elements -->
+  <div class="absolute inset-0 opacity-10">
+    {#each Array(20) as _, i}
+      <div 
+        class="absolute rounded-full bg-yellow-400 animate-float"
+        style="
+          left: {Math.random() * 100}%;
+          top: {Math.random() * 100}%;
+          width: {2 + Math.random() * 3}px;
+          height: {2 + Math.random() * 3}px;
+          animation-delay: {Math.random() * 5}s;
+          animation-duration: {4 + Math.random() * 3}s;
+        "
+      ></div>
+    {/each}
+  </div>
+
+  <!-- Decorative Elements -->
+  <div class="absolute top-20 right-10 opacity-5">
+    <div class="w-32 h-32 border-4 border-yellow-400 rounded-full animate-spin-slow"></div>
+  </div>
+  <div class="absolute bottom-20 left-10 opacity-5">
+    <div class="w-24 h-24 border-4 border-blue-400 rounded-full animate-spin-slow" style="animation-direction: reverse;"></div>
+  </div>
+
+  <div class="container mx-auto px-6 relative z-10">
     <!-- Header -->
-    <div class="text-center mb-12">
-      <h2 class="text-3xl md:text-4xl font-bold text-blue-900 mb-3">Galeri Kegiatan</h2>
-      <div class="w-16 h-1 bg-yellow-500 mx-auto mb-4"></div>
-      <p class="text-gray-600 max-w-3xl mx-auto">Potret momen berkuda & memanah bersama Amoebas Archery.</p>
+    <div class="text-center mb-20">
+      <div class="flex justify-center items-center gap-3 mb-4">
+        <div class="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+        <span class="text-yellow-400 text-sm font-semibold tracking-widest uppercase">Galeri Kegiatan</span>
+        <div class="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+      </div>
+      
+      <h2 class="text-4xl lg:text-5xl font-black text-white mb-4 leading-tight">
+        Momen
+        <span class="inline-block bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-300 bg-clip-text text-transparent">
+          Berkesan
+        </span>
+      </h2>
+      
+      <div class="flex justify-center items-center gap-3 mb-6">
+        <div class="w-16 h-1 bg-gradient-to-r from-yellow-400 to-transparent"></div>
+        <div class="w-2 h-2 bg-yellow-400 rounded-full"></div>
+        <div class="w-16 h-1 bg-gradient-to-l from-yellow-400 to-transparent"></div>
+      </div>
+      
+      <p class="text-xl text-gray-300 max-w-3xl mx-auto">
+        Potret momen berkuda & memanah bersama Amoebas Archery.
+      </p>
 
       {#if adminStatus}
-        <div class="mt-6 flex flex-wrap gap-3 justify-center">
+        <div class="mt-8 flex flex-wrap gap-4 justify-center">
           <button
-            class="bg-yellow-500 hover:bg-yellow-400 text-blue-900 font-bold py-2 px-6 rounded-lg transition"
+            class="group relative bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-blue-900 font-bold py-3 px-8 rounded-full transition-all duration-300 transform hover:scale-105 hover:shadow-2xl shadow-lg overflow-hidden"
             on:click={() => showUploadModal = true}
           >
-            + Upload Foto Baru
+            <div class="absolute inset-0 bg-white/20 transform translate-x-full group-hover:translate-x-0 transition-transform duration-300"></div>
+            <div class="relative flex items-center gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+              </svg>
+              <span>Upload Foto Baru</span>
+            </div>
           </button>
 
           {#if images.length > 0}
             <button
-              class="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-6 rounded-lg transition"
+              class="group relative bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-bold py-3 px-8 rounded-full transition-all duration-300 transform hover:scale-105 hover:shadow-2xl shadow-lg overflow-hidden"
               on:click={confirmDeleteAll}
             >
-              🗑 Hapus Semua
+              <div class="absolute inset-0 bg-white/20 transform translate-x-full group-hover:translate-x-0 transition-transform duration-300"></div>
+              <div class="relative flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6"/>
+                </svg>
+                <span>Hapus Semua</span>
+              </div>
             </button>
           {/if}
         </div>
@@ -293,44 +390,59 @@
     <!-- Loading -->
     {#if isLoading}
       <div class="flex justify-center items-center h-64">
-        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-900"></div>
+        <div class="relative">
+          <div class="w-16 h-16 border-4 border-yellow-400/30 border-t-yellow-400 rounded-full animate-spin"></div>
+          <div class="absolute inset-0 w-16 h-16 border-4 border-transparent border-t-blue-400 rounded-full animate-spin" style="animation-duration: 1.5s"></div>
+        </div>
       </div>
     {:else}
       {#if images.length === 0}
         <!-- Empty state -->
-        <div class="text-center py-12">
-          <svg class="w-24 h-24 mx-auto mb-4 text-gray-300" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <rect x="3" y="5" width="18" height="14" rx="2"></rect>
-            <path d="M8 11l2 2 4-4"></path>
-          </svg>
-          <h3 class="text-lg font-semibold text-gray-700">Belum ada foto di galeri</h3>
-          <p class="text-gray-500 mt-2">Nanti akan muncul momen-momen seru di sini — sabar ya! 😊</p>
+        <div class="text-center py-20">
+          <div class="relative inline-block mb-6">
+            <div class="w-32 h-32 bg-gradient-to-br from-slate-800/50 to-blue-900/50 backdrop-blur-sm border border-white/10 rounded-3xl flex items-center justify-center">
+              <svg class="w-16 h-16 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+                <path d="M8 11l2 2 4-4"></path>
+              </svg>
+            </div>
+            <div class="absolute -top-2 -right-2 w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center">
+              <svg class="w-4 h-4 text-blue-900" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              </svg>
+            </div>
+          </div>
+          <h3 class="text-2xl font-bold text-white mb-3">Belum ada foto di galeri</h3>
+          <p class="text-gray-400 text-lg max-w-md mx-auto">Nanti akan muncul momen-momen seru di sini — sabar ya! 😊</p>
         </div>
       {:else}
         <!-- Grid -->
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {#each images as img}
-            <div class="relative group rounded-lg overflow-hidden shadow-md hover:shadow-xl transition">
-              <img
-                src={img.url}
-                alt={img.name}
-                class="w-full h-64 object-cover transform group-hover:scale-105 transition-transform duration-300"
-                loading="lazy"
-              />
-
-              {#if adminStatus}
-                <button
-                  class="absolute top-3 right-3 bg-red-600 text-white p-2 rounded-full shadow 
-                         opacity-90 hover:opacity-100 transition"
-                  on:click={() => confirmDelete(img)}
-                  title="Hapus gambar"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6"/>
-                  </svg>
-                </button>
-              {/if}
+            <div class="group relative bg-gradient-to-br from-slate-800/50 to-blue-900/50 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden shadow-2xl hover:shadow-yellow-500/20 transition-all duration-500 transform hover:scale-[1.03]">
+              <div class="relative overflow-hidden">
+                <img
+                  src={img.url}
+                  alt={img.name}
+                  class="w-full h-64 object-cover transform group-hover:scale-110 transition-transform duration-700"
+                  loading="lazy"
+                />
+                <div class="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                
+                {#if adminStatus}
+                  <button
+                    class="absolute top-3 right-3 bg-gradient-to-r from-red-600 to-rose-700 text-white p-2.5 rounded-full shadow-2xl 
+                           opacity-90 hover:opacity-100 transform hover:scale-110 transition-all duration-200 border border-white/20"
+                    on:click={() => confirmDelete(img)}
+                    title="Hapus gambar"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6"/>
+                    </svg>
+                  </button>
+                {/if}
+              </div>
             </div>
           {/each}
         </div>
@@ -340,70 +452,102 @@
 
   <!-- Upload Modal -->
   {#if showUploadModal}
-    <div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div class="bg-white rounded-lg shadow-xl w-full max-w-md transform transition-all duration-300 animate-fadeInScale">
+    <div class="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" 
+         on:click={handleBackdropClick}>
+      <div class="bg-gradient-to-br from-slate-800 via-blue-900 to-indigo-900 backdrop-blur-sm border border-white/10 rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-300 animate-fadeInScale">
         <div class="p-6">
-          <h3 class="text-xl font-bold text-blue-900 mb-4">Upload Foto Baru</h3>
+          <!-- Header -->
+          <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-xl flex items-center justify-center">
+                <svg class="w-5 h-5 text-blue-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+              </div>
+              <h3 class="text-xl font-bold text-white">Upload Foto Baru</h3>
+            </div>
+            <button 
+              class="text-gray-400 hover:text-white transition-colors"
+              on:click={cancelUpload}
+            >
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
 
+          <!-- Form Content -->
           <div class="space-y-4">
+            <!-- Title -->
             <div>
-              <label class="block text-sm text-gray-700 mb-1">Judul (opsional)</label>
+              <label class="block text-sm text-gray-300 mb-2 font-medium">Judul (opsional)</label>
               <input
                 type="text"
                 bind:value={newImage.title}
-                class="w-full px-3 py-2 border rounded-md"
+                class="w-full px-4 py-2.5 bg-slate-700/50 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent transition-all text-sm"
                 placeholder="Judul foto (opsional)"
               />
             </div>
 
+            <!-- Description -->
             <div>
-              <label class="block text-sm text-gray-700 mb-1">Deskripsi (opsional)</label>
+              <label class="block text-sm text-gray-300 mb-2 font-medium">Deskripsi (opsional)</label>
               <textarea
                 bind:value={newImage.description}
-                rows="3"
-                class="w-full px-3 py-2 border rounded-md"
+                rows="2"
+                class="w-full px-4 py-2.5 bg-slate-700/50 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent transition-all resize-none text-sm"
                 placeholder="Deskripsi singkat (opsional)"
               ></textarea>
             </div>
 
+            <!-- File Upload -->
             <div>
-              <label class="block text-sm text-gray-700 mb-1">Pilih Foto</label>
-              <input
-                type="file"
-                accept="image/*"
-                on:change={handleFileSelect}
-                class="w-full px-3 py-2 border rounded-md"
-              />
-              <p class="text-xs text-gray-500 mt-1">Format: JPG/PNG/GIF — maksimal 5MB</p>
+              <label class="block text-sm text-gray-300 mb-2 font-medium">Pilih Foto</label>
+              <div class="relative">
+                <input
+                  type="file"
+                  accept="image/*"
+                  on:change={handleFileSelect}
+                  class="w-full px-4 py-2.5 bg-slate-700/50 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent transition-all text-sm file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-yellow-500 file:text-blue-900 hover:file:bg-yellow-400"
+                />
+                <p class="text-xs text-gray-400 mt-1">Format: JPG/PNG/GIF — maksimal 5MB</p>
+              </div>
               {#if newImage.file}
-                <p class="text-sm text-green-600 mt-1">File terpilih: {newImage.file.name}</p>
+                <div class="mt-2 p-2 bg-green-500/10 border border-green-400/20 rounded-lg">
+                  <p class="text-green-400 text-xs font-medium">✓ File terpilih: {newImage.file.name}</p>
+                </div>
               {/if}
             </div>
 
+            <!-- Error Message -->
             {#if uploadError}
-              <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded text-sm">
-                {uploadError}
+              <div class="bg-red-500/10 border border-red-400/20 px-3 py-2 rounded-lg">
+                <p class="text-red-400 text-sm font-medium">{uploadError}</p>
               </div>
             {/if}
 
+            <!-- Progress Bar -->
             {#if uploadProgress > 0}
-              <div class="w-full bg-gray-200 rounded-full h-2.5">
-                <div class="bg-blue-600 h-2.5 rounded-full transition-all" style={`width: ${uploadProgress}%`}></div>
+              <div class="space-y-2">
+                <div class="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+                  <div class="bg-gradient-to-r from-yellow-400 to-amber-500 h-2 rounded-full transition-all duration-300" style={`width: ${uploadProgress}%`}></div>
+                </div>
+                <p class="text-center text-gray-400 text-xs font-medium">Upload: {uploadProgress}%</p>
               </div>
-              <p class="text-sm text-gray-600 text-center">Upload: {uploadProgress}%</p>
             {/if}
           </div>
 
-          <div class="flex justify-end space-x-3 mt-6">
+          <!-- Action Buttons -->
+          <div class="flex justify-end space-x-3 mt-6 pt-4 border-t border-white/10">
             <button
-              class="px-4 py-2 text-gray-600 hover:text-gray-800"
+              class="px-4 py-2 text-gray-300 hover:text-white font-medium transition-all disabled:opacity-50 rounded-lg hover:bg-white/5 text-sm"
               on:click={cancelUpload}
               disabled={uploadProgress > 0 && uploadProgress < 100}
             >
               Batal
             </button>
             <button
-              class="px-4 py-2 bg-blue-900 text-white rounded-md hover:bg-blue-800 disabled:opacity-50"
+              class="px-4 py-2 bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-blue-900 font-bold rounded-lg transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 text-sm"
               on:click={uploadImage}
               disabled={!newImage.file || (uploadProgress > 0 && uploadProgress < 100)}
             >
@@ -417,19 +561,30 @@
 
   <!-- Delete One Modal -->
   {#if showDeleteModal}
-    <div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 text-center animate-fadeInScale">
-        <svg class="w-12 h-12 text-red-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6"/>
-        </svg>
-        <h3 class="text-lg font-semibold text-gray-900 mb-2">Hapus Gambar?</h3>
-        <p class="text-gray-600 mb-6">Gambar ini akan dihapus permanen dari storage.</p>
-        <div class="flex justify-center space-x-4">
-          <button class="px-4 py-2 border rounded-md text-gray-600 hover:text-gray-800" on:click={cancelDelete} disabled={deleting}>
+    <div class="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" 
+         on:click={handleBackdropClick}>
+      <div class="bg-gradient-to-br from-slate-800 via-blue-900 to-indigo-900 backdrop-blur-sm border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center animate-fadeInScale">
+        <div class="w-16 h-16 bg-gradient-to-br from-red-600 to-rose-700 rounded-full flex items-center justify-center mx-auto mb-4 shadow-2xl">
+          <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6"/>
+          </svg>
+        </div>
+        <h3 class="text-xl font-bold text-white mb-2">Hapus Gambar?</h3>
+        <p class="text-gray-400 text-sm mb-6">Gambar ini akan dihapus permanen dari storage.</p>
+        <div class="flex justify-center space-x-3">
+          <button 
+            class="px-4 py-2 border border-white/20 text-gray-300 rounded-lg hover:text-white hover:bg-white/5 transition-all disabled:opacity-50 text-sm" 
+            on:click={cancelDelete} 
+            disabled={deleting}
+          >
             Batal
           </button>
-          <button class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700" on:click={deleteImage} disabled={deleting}>
+          <button 
+            class="px-4 py-2 bg-gradient-to-r from-red-600 to-rose-700 text-white rounded-lg hover:from-red-500 hover:to-rose-600 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 text-sm" 
+            on:click={deleteImage} 
+            disabled={deleting}
+          >
             {deleting ? 'Menghapus...' : 'Hapus'}
           </button>
         </div>
@@ -439,19 +594,30 @@
 
   <!-- Delete ALL Modal -->
   {#if showDeleteAllModal}
-    <div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 text-center animate-fadeInScale">
-        <svg class="w-12 h-12 text-red-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6"/>
-        </svg>
-        <h3 class="text-lg font-semibold text-gray-900 mb-2">Hapus Semua Gambar?</h3>
-        <p class="text-gray-600 mb-6">Semua gambar akan dihapus permanen dari storage.</p>
-        <div class="flex justify-center space-x-4">
-          <button class="px-4 py-2 border rounded-md text-gray-600 hover:text-gray-800" on:click={cancelDeleteAll} disabled={deletingAll}>
+    <div class="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" 
+         on:click={handleBackdropClick}>
+      <div class="bg-gradient-to-br from-slate-800 via-blue-900 to-indigo-900 backdrop-blur-sm border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center animate-fadeInScale">
+        <div class="w-16 h-16 bg-gradient-to-br from-red-600 to-rose-700 rounded-full flex items-center justify-center mx-auto mb-4 shadow-2xl">
+          <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6"/>
+          </svg>
+        </div>
+        <h3 class="text-xl font-bold text-white mb-2">Hapus Semua Gambar?</h3>
+        <p class="text-gray-400 text-sm mb-6">Semua gambar akan dihapus permanen dari storage.</p>
+        <div class="flex justify-center space-x-3">
+          <button 
+            class="px-4 py-2 border border-white/20 text-gray-300 rounded-lg hover:text-white hover:bg-white/5 transition-all disabled:opacity-50 text-sm" 
+            on:click={cancelDeleteAll} 
+            disabled={deletingAll}
+          >
             Batal
           </button>
-          <button class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700" on:click={deleteAllImages} disabled={deletingAll}>
+          <button 
+            class="px-4 py-2 bg-gradient-to-r from-red-600 to-rose-700 text-white rounded-lg hover:from-red-500 hover:to-rose-600 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 text-sm" 
+            on:click={deleteAllImages} 
+            disabled={deletingAll}
+          >
             {deletingAll ? 'Menghapus...' : 'Hapus Semua'}
           </button>
         </div>
@@ -465,5 +631,5 @@
     from { opacity: 0; transform: scale(0.95); }
     to { opacity: 1; transform: scale(1); }
   }
-  .animate-fadeInScale { animation: fadeInScale 0.2s ease-out; }
+  .animate-fadeInScale { animation: fadeInScale 0.3s ease-out; }
 </style>
